@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Generador CURP Oficial - TS & TL</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; padding: 20px; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 450px; }
+        h2 { color: #1a73e8; text-align: center; }
+        .form-group { margin-bottom: 12px; }
+        label { font-weight: bold; display: block; margin-bottom: 5px; font-size: 14px; }
+        input, select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background-color: #1a73e8; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; margin-top: 15px; }
+        #resultado { margin-top: 20px; padding: 15px; background-color: #e6f4ea; border: 1px solid #34a853; border-radius: 8px; display: none; text-align: center; }
+        .curp-val { font-family: monospace; font-size: 26px; font-weight: bold; color: #1e8e3e; letter-spacing: 3px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Generador de CURP</h2>
+        <form id="curpForm">
+            <div class="form-group"><label>Nombre(s):</label><input type="text" name="nombre" required></div>
+            <div class="form-group"><label>Apellido Paterno:</label><input type="text" name="paterno" required></div>
+            <div class="form-group"><label>Apellido Materno:</label><input type="text" name="materno"></div>
+            <div class="form-group"><label>Fecha de Nacimiento:</label><input type="date" name="fecha" required></div>
+            <div class="form-group">
+                <label>Género:</label>
+                <select name="genero" required>
+                    <option value="H">Hombre</option>
+                    <option value="M">Mujer</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Estado de Nacimiento:</label>
+                <select name="estado" required>
+                    <option value="TS">Tamaulipas</option>
+                    <option value="TL">Tlaxcala</option>
+                </select>
+            </div>
+            <button type="submit">Generar CURP</button>
+        </form>
+
+        <div id="resultado">
+            <p>CURP Procesada:</p>
+            <div class="curp-val" id="curpTexto"></div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('curpForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const response = await fetch('/generar', {
+                method: 'POST',
+                body: new URLSearchParams(formData)
+            });
+            const text = await response.text();
+            document.getElementById('curpTexto').innerText = text;
+            document.getElementById('resultado').style.display = 'block';
+        };
+    </script>
+</body>
+</html>
