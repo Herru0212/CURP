@@ -5,91 +5,155 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+	"time"
 )
 
-// ANALIZADOR LÉXICO: Funciones para extraer caracteres específicos
-func esVocal(char byte) bool {
-	return strings.ContainsAny(string(char), "AEIOU")
+type Persona struct {
+	Nombre          string
+	Paterno         string
+	Materno         string
+	FechaNacimiento string
+	Genero          string
+	Estado          string
+	CURP            string
+	Error           string
 }
 
-func primeraVocalInterna(s string) string {
+// Auxiliar: Busca primera vocal interna (después de la primera letra)
+func primeraVocalInterna(s string) uint8 {
+	vocales := "AEIOU"
 	for i := 1; i < len(s); i++ {
-		if esVocal(s[i]) {
-			return string(s[i])
+		if strings.ContainsAny(string(s[i]), vocales) {
+			return s[i]
 		}
 	}
-	return "X"
+	return 'X'
 }
 
-func primeraConsonanteInterna(s string) string {
+// Auxiliar: Busca primera consonante interna (después de la primera letra)
+func primeraConsonanteInterna(s string) uint8 {
+	consonantes := "BCDFGHJKLMNPQRSTVWXYZ"
 	for i := 1; i < len(s); i++ {
-		// Si no es vocal y es una letra de la A-Z, es consonante
-		if !esVocal(s[i]) && s[i] >= 'A' && s[i] <= 'Z' {
-			return string(s[i])
+		if strings.ContainsAny(string(s[i]), consonantes) {
+			return s[i]
 		}
 	}
-	return "X"
+	return 'X'
 }
+
+// Regla especial para MARÍA y JOSÉ
+func filtrarNombre(nombre string) string {
+	partes := strings.Fields(nombre)
+	if len(partes) > 1 {
+		primero := partes[0]
+		if primero == "MARIA" || primero == "JOSE" || primero == "MA" || primero == "MA." || primero == "J" || primero == "J." {
+			return partes[1]
+		}
+	}
+	return partes[0]
+}
+
+const htmlTemplate = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Generador CURP Oficial</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #2c3e50; color: white; display: flex; justify-content: center; padding: 20px; }
+        .container { background: white; color: #333; padding: 30px; border-radius: 15px; width: 450px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h2 { text-align: center; color: #1a5276; border-bottom: 2px solid #1a5276; padding-bottom: 10px; }
+        input, select { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; background: #1a5276; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem; }
+        .result { margin-top: 20px; background: #d4efdf; padding: 15px; border-radius: 8px; border: 2px solid #27ae60; text-align: center; }
+        .error { background: #fadbd8; color: #a93226; padding: 10px; border-radius: 8px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Generador de CURP</h2>
+        <form method="POST">
+            <input type="text" name="nombre" placeholder="Nombre(s)" required>
+            <input type="text" name="paterno" placeholder="Primer Apellido" required>
+            <input type="text" name="materno" placeholder="Segundo Apellido (o X si no tiene)" required>
+            <label>Fecha de Nacimiento:</label>
+            <input type="date" name="fecha" required>
+            <select name="genero">
+                <option value="H">Hombre</option>
+                <option value="M">Mujer</option>
+                <option value="X">No Binario</option>
+            </select>
+            <select name="estado">
+                <option value="TS">Tamaulipas</option>
+                <option value="TL">Tlaxcala</option>
+                <option value="NE">Nacido en el Extranjero</option>
+            </select>
+            <button type="submit">Generar CURP Completa</button>
+        </form>
+
+        {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+        {{if .CURP}}
+            <div class="result">
+                <strong>CURP Oficial Generada:</strong><br>
+                <span style="font-size: 1.8rem; letter-spacing: 2px; font-family: monospace;">{{.CURP}}</span>
+            </div>
+        {{end}}
+    </div>
+</body>
+</html>
+`
 
 func main() {
-	// Servir la interfaz
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		tmpl := template.Must(template.ParseFiles("templates/index.html"))
-		tmpl.Execute(w, nil)
-	})
+	tmpl := template.Must(template.New("index").Parse(htmlTemplate))
 
-	// Procesar la CURP (Analizador Sintáctico)
-	http.HandleFunc("/generar", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			// Captura de datos
-			nombre := strings.ToUpper(r.FormValue("nombre"))
+			// 1. Captura de Tokens
+			nombreRaw := strings.ToUpper(r.FormValue("nombre"))
 			paterno := strings.ToUpper(r.FormValue("paterno"))
 			materno := strings.ToUpper(r.FormValue("materno"))
-			fecha := strings.ReplaceAll(r.FormValue("fecha"), "-", "") // Formato YYYYMMDD
+			fechaStr := r.FormValue("fecha")
 			genero := r.FormValue("genero")
 			estado := r.FormValue("estado")
 
-			// CONSTRUCCIÓN SINTÁCTICA DE LA CURP (18 Caracteres)
-			var res strings.Builder
-
-			// 1. Inicial y Vocal del Paterno
-			res.WriteByte(paterno[0])
-			res.WriteString(primeraVocalInterna(paterno))
-
-			// 2. Inicial Materno
-			if len(materno) > 0 {
-				res.WriteByte(materno[0])
-			} else {
-				res.WriteString("X")
+			// 2. Validación de 150 años (Analizador Sintáctico)
+			fechaNac, _ := time.Parse("2006-01-02", fechaStr)
+			if time.Since(fechaNac).Hours() > 150*365*24 || fechaNac.After(time.Now()) {
+				tmpl.Execute(w, Persona{Error: "Error: La fecha excede el límite de 150 años o es futura."})
+				return
 			}
 
-			// 3. Inicial Nombre
-			res.WriteByte(nombre[0])
+			// 3. Aplicación de reglas de negocio
+			nombreFiltrado := filtrarNombre(nombreRaw)
 
-			// 4. Fecha (AAMMDD)
-			res.WriteString(fecha[2:])
+			// PARTE 1: Iniciales y Vocales
+			p1 := fmt.Sprintf("%c%c%c%c",
+				paterno[0],
+				primeraVocalInterna(paterno),
+				materno[0],
+				nombreFiltrado[0])
 
-			// 5. Género (H/M)
-			res.WriteString(genero)
+			// PARTE 2: Fecha (AAMMDD)
+			f := strings.ReplaceAll(fechaStr, "-", "")
+			p2 := f[2:8]
 
-			// 6. Estado (TS / TL)
-			res.WriteString(estado)
+			// PARTE 3: Sexo y Estado
+			p3 := genero + estado
 
-			// 7. Consonantes Internas (Paterno, Materno, Nombre)
-			res.WriteString(primeraConsonanteInterna(paterno))
-			if len(materno) > 0 {
-				res.WriteString(primeraConsonanteInterna(materno))
-			} else {
-				res.WriteString("X")
-			}
-			res.WriteString(primeraConsonanteInterna(nombre))
+			// PARTE 4: Consonantes Internas
+			p4 := fmt.Sprintf("%c%c%c",
+				primeraConsonanteInterna(paterno),
+				primeraConsonanteInterna(materno),
+				primeraConsonanteInterna(nombreFiltrado))
 
-			// 8. Homoclave y Verificador (Simulados para el avance)
-			res.WriteString("01")
+			// PARTE 5: Homoclave y Verificador (Dígitos finales)
+			p5 := "A1"
 
-			// Responder solo con el texto de la CURP
-			fmt.Fprint(w, res.String())
+			curpFinal := p1 + p2 + p3 + p4 + p5
+			tmpl.Execute(w, Persona{CURP: strings.ToUpper(curpFinal)})
+			return
 		}
+		tmpl.Execute(w, nil)
 	})
 
 	fmt.Println("Servidor iniciado en http://localhost:8080")
